@@ -28,9 +28,9 @@ async function main() {
     body: JSON.stringify({ identifier: EMAIL, password: PASSWORD }),
   });
   if (!loginRes.ok) {
-    const err = await loginRes.json().catch(() => ({}));
-    add('Login failed: ' + JSON.stringify(err));
-    sendDiscord('❌ Grey Auto-Claim gagal: Login failed\n' + JSON.stringify(err));
+    const text = await loginRes.text().catch(() => '');
+    add('Login failed: status=' + loginRes.status + ' body=' + text);
+    sendDiscord('❌ Grey Auto-Claim gagal: status=' + loginRes.status + '\n' + text);
     process.exit(1);
   }
   const { token } = await loginRes.json();
