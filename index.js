@@ -1,12 +1,25 @@
 const BASE = 'https://app.minegrey.com';
 const EMAIL = process.env.GREY_EMAIL;
 const PASSWORD = process.env.GREY_PASSWORD;
+const WEBHOOK_URL = process.env.WEBHOOK_URL;
+
+function sendDiscord(msg) {
+  if (!WEBHOOK_URL) return;
+  fetch(WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: msg }),
+  }).catch(() => {});
+}
 
 async function main() {
   if (!EMAIL || !PASSWORD) {
     console.error('Set GREY_EMAIL and GREY_PASSWORD env vars');
     process.exit(1);
   }
+
+  const log = [];
+  const add = (s) => { console.log(s); log.push(s); };
 
   // 1. Login
   const loginRes = await fetch(`${BASE}/api/auth/login`, {
@@ -16,41 +29,64 @@ async function main() {
   });
   if (!loginRes.ok) {
     const err = await loginRes.json().catch(() => ({}));
-    console.error('Login failed:', err);
+    add('Login failed: ' + JSON.stringify(err));
+    sendDiscord('❌ Grey Auto-Claim gagal: Login failed\n' + JSON.stringify(err));
     process.exit(1);
   }
   const { token } = await loginRes.json();
-  console.log('Login OK');
+  add('Login OK');
 
   const auth = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' };
 
-  // 2. Start mining (tap every 24h)
+  // 2. Start mining
   const mineRes = await fetch(`${BASE}/api/mining`, {
     method: 'POST',
     headers: auth,
   });
   if (mineRes.ok) {
     const data = await mineRes.json();
-    console.log('Mining started:', JSON.stringify({ balance: data.balance, sessionBalance: data.sessionBalance }));
+    add('Mining: balance=' + data.balance + ' session=' + data.sessionBalance);
   } else {
     const err = await mineRes.json().catch(() => ({}));
-    console.log('Mining result:', err);
+    add('Mining result: ' + JSON.stringify(err));
   }
 
   // 3. Daily checkin
+  let checkinReward = 0;
   const checkinRes = await fetch(`${BASE}/api/tasks/checkin`, {
     method: 'POST',
     headers: auth,
   });
   if (checkinRes.ok) {
     const data = await checkinRes.json();
-    console.log('Checkin OK:', JSON.stringify({ reward: data.reward, streak: data.streak }));
+    add('Checkin: reward=' + data.reward + ' streak=' + data.streak);
+    checkinReward = data.reward || 0;
   } else {
     const err = await checkinRes.json().catch(() => ({}));
-    console.log('Checkin result:', err);
+    add('Checkin: ' + (err.error || JSON.stringify(err)));
   }
 
-  console.log('Done. Next run in 24h.');
+  // 4. Get final balance
+  const balRes = await fetch(`${BASE}/api/mining`, {
+    method: 'GET',
+    headers: auth,
+  });
+  let finalBalance = '?';
+  if (balRes.ok) {
+    const data = await balRes.json();
+    finalBalance = data.balance;
+  }
+
+  add('Done. Balance: ' + finalBalance);
+
+  // Webhook summary
+  const lines = log.join('\n');
+  console.log('---');
+  sendDiscord(
+    '✅ Grey Auto-Claim Selesai\n' +
+    lines +
+    '\nBalance: ' + finalBalance
+  );
 }
 
 main().catch((e) => {
