@@ -1,0 +1,10 @@
+{
+  "name": "grey-autoclaim",
+  "version": "1.0.0",
+  "description": "Auto-claim Grey Network mining every 24h",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {}
+}
